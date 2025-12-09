@@ -215,6 +215,104 @@ pytest --cov=InsightEngine tests/
 - `/api/v1/query/search` - 信息查询
 - `/api/v1/report/generate` - 报告生成
 
+## 🔍 Tavily 和 Anspire 的功能对比
+
+### 概述
+
+BettaFish 系统中的 Tavily 和 Anspire 是两个功能互补的搜索服务，分别服务于不同的引擎模块。
+
+### 功能对比
+
+| 特性 | Tavily | Anspire |
+|------|---------|---------|
+| **服务对象** | QueryEngine（查询引擎） | MediaEngine（媒体引擎） |
+| **功能定位** | 专业新闻搜索API | 多模态搜索API |
+| **搜索内容** | 新闻资讯、舆情信息 | 网页、图片、结构化数据 |
+| **技术实现** | tavily-python SDK | HTTP API调用 |
+| **配置要求** | 必须设置 TAVILY_API_KEY | 可选，支持免费搜索降级 |
+
+### Tavily 详细说明
+
+**主要功能**：
+- 深度新闻分析 (deep_search_news)
+- 24小时新闻搜索 (search_news_last_24_hours)
+- 本周新闻搜索 (search_news_last_week)
+- 新闻图片搜索 (search_images_for_news)
+- 按日期搜索新闻 (search_news_by_date)
+
+**使用场景**：
+- 国内外新闻舆情搜索
+- 实时新闻监控
+- 历史新闻查询
+
+**配置示例**：
+```env
+TAVILY_API_KEY=your_tavily_api_key_here
+```
+
+### Anspire 详细说明
+
+**主要功能**：
+- 全面搜索（包含网页、图片、AI总结）
+- 结构化数据查询（天气、股票、汇率等）
+- 网页搜索
+- 时效性搜索（24小时、一周）
+
+**使用场景**：
+- 多模态内容搜索
+- 结构化数据查询
+- 媒体内容分析
+
+**配置选项**：
+```env
+# 搜索工具类型
+SEARCH_TOOL_TYPE=AnspireAPI  # 或 BochaAPI
+
+# Anspire API（可选）
+ANSPIRE_API_KEY=your_anspire_key
+ANSPIRE_BASE_URL=https://plugin.anspire.cn/api/ntsearch/search
+
+# 如果不配置 ANSPIRE_API_KEY，系统会自动使用免费搜索模式
+```
+
+### 免费搜索模式
+
+当 Anspire API Key 未配置时，MediaEngine 会自动降级到免费搜索模式：
+
+**特性**：
+- 使用 DuckDuckGo 作为搜索源
+- 集成系统 LLM 生成 AI 总结
+- 与付费 API 接口兼容
+- 完全免费，无使用限制
+
+**配置**：
+```env
+# 自动启用免费搜索模式
+SEARCH_TOOL_TYPE=AnspireAPI  # 保持这个值
+# ANSPIRE_API_KEY=  # 不配置或注释掉
+```
+
+### 如何选择？
+
+1. **只需要新闻搜索**：
+   - 配置：仅设置 `TAVILY_API_KEY`
+   - 功能：QueryEngine 可用
+
+2. **只需要多模态搜索**：
+   - 配置：不设置搜索 API（自动使用免费模式）或设置 `ANSPIRE_API_KEY`
+   - 功能：MediaEngine 可用
+
+3. **需要完整功能**：
+   - 配置：同时设置 `TAVILY_API_KEY` 和 `ANSPIRE_API_KEY`
+   - 功能：所有引擎完整可用
+
+### 注意事项
+
+- 两个 API 服务不同模块，功能互补，不存在重叠
+- 可以选择性配置，根据需求启用相应功能
+- Anspire 支持免费降级，Tavily 需要付费 API
+- 系统会根据配置自动选择最适合的搜索方式
+
 ## 🛠️ 配置说明
 
 ### 环境变量配置
@@ -231,7 +329,7 @@ GEMINI_API_KEY=your_gemini_key
 # 搜索API配置
 TAVILY_API_KEY=your_tavily_key
 BOCHA_API_KEY=your_bocha_key
-ANSP_API_KEY=your_ansp_key
+ANSPIRE_API_KEY=your_anspire_key
 
 # 应用配置
 FLASK_ENV=development
