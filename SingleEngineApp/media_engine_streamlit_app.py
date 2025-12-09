@@ -101,15 +101,20 @@ def main():
             st.error("请在您的环境变量中设置MEDIA_ENGINE_API_KEY")
             logger.error("请在您的环境变量中设置MEDIA_ENGINE_API_KEY")
             return
-        if (not settings.BOCHA_WEB_SEARCH_API_KEY) and (not settings.ANSPIRE_API_KEY):
-            st.error("请在您的环境变量中设置BOCHA_WEB_SEARCH_API_KEY或ANSPIRE_API_KEY")
-            logger.error("请在您的环境变量中设置BOCHA_WEB_SEARCH_API_KEY或ANSPIRE_API_KEY")
-            return
+
+        # 检查搜索API配置 - 支持免费搜索模式
+        if not settings.BOCHA_WEB_SEARCH_API_KEY and not settings.ANSPIRE_API_KEY:
+            st.warning("未配置搜索API密钥，将使用免费搜索模式（DuckDuckGo + AI总结）")
+            logger.info("未配置搜索API密钥，将使用免费搜索模式")
+            # 使用免费模式，设置一个虚拟的API密钥
+            ansire_key = "free_search_enabled"
+        else:
+            ansire_key = settings.ANSPIRE_API_KEY
 
         # 自动使用配置文件中的API密钥
         engine_key = settings.MEDIA_ENGINE_API_KEY
         bocha_key = settings.BOCHA_WEB_SEARCH_API_KEY
-        ansire_key = settings.ANSPIRE_API_KEY
+        # ansire_key 已在上面处理
 
         # 构建 Settings（pydantic_settings风格，优先大写环境变量）
         if bocha_key:
@@ -123,8 +128,12 @@ def main():
                 SEARCH_CONTENT_MAX_LENGTH=max_content_length,
                 OUTPUT_DIR="media_engine_streamlit_reports",
             )
-        elif ansire_key:
-            logger.info("使用Anspire搜索API密钥")
+        else:
+            # 使用 Anspire 或免费搜索模式
+            if settings.ANSPIRE_API_KEY:
+                logger.info("使用Anspire搜索API密钥")
+            else:
+                logger.info("使用免费搜索模式（DuckDuckGo + AI总结）")
             config = Settings(
                 MEDIA_ENGINE_API_KEY=engine_key,
                 MEDIA_ENGINE_BASE_URL=settings.MEDIA_ENGINE_BASE_URL,

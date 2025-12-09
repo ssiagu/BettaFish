@@ -268,6 +268,8 @@ class BochaMultimodalSearch:
 class AnspireAISearch:
     """
     Anspire AI Search 客户端
+
+    支持免费搜索模式：当没有API key时，自动切换到DuckDuckGo免费搜索
     """
     ANSPIRE_BASE_URL = settings.ANSPIRE_BASE_URL or "https://plugin.anspire.cn/api/ntsearch/search"
 
@@ -279,15 +281,27 @@ class AnspireAISearch:
         """
         if api_key is None:
             api_key = settings.ANSPIRE_API_KEY
-            if not api_key:
-                raise ValueError("Anspire API Key未找到！请设置 ANSPIRE_API_KEY 环境变量或在初始化时提供")
 
-        self._headers = {
-            'Authorization': f'Bearer {api_key}',
-            'Content-Type': 'application/json',
-            'Connection': 'keep-alive',
-            'Accept': '*/*'
-        }
+        if api_key:
+            # 使用付费API
+            self.use_free_search = False
+            self._headers = {
+                'Authorization': f'Bearer {api_key}',
+                'Content-Type': 'application/json',
+                'Connection': 'keep-alive',
+                'Accept': '*/*'
+            }
+            logger.info("使用 Anspire API 搜索模式")
+        else:
+            # 自动切换到免费搜索
+            self.use_free_search = True
+            try:
+                from .free_search import FreeSearchClient
+                self._free_client = FreeSearchClient(enable_ai_summary=True)
+                logger.info("自动切换到免费搜索模式 (DuckDuckGo + AI总结)")
+            except ImportError as e:
+                logger.error(f"免费搜索客户端初始化失败: {e}")
+                raise ValueError("无法初始化免费搜索客户端，请安装 duckduckgo-search: pip install duckduckgo-search")
 
     def _parse_search_response(self, response_dict: Dict[str, Any], query: str) -> AnspireResponse:
         final_response = AnspireResponse(query=query)
@@ -336,10 +350,13 @@ class AnspireAISearch:
         适用于需要多种信息来源的场景。
         """
         logger.info(f"--- TOOL: 综合搜索 (query: {query}) ---")
-        return self._search_internal(
-            query=query,
-            top_k=max_results
-        )
+        if self.use_free_search:
+            return self._free_client.comprehensive_search(query, max_results)
+        else:
+            return self._search_internal(
+                query=query,
+                top_k=max_results
+            )
 
     def search_last_24_hours(self, query: str, max_results: int = 10) -> AnspireResponse:
         """
@@ -347,12 +364,15 @@ class AnspireAISearch:
         此工具专门查找过去24小时内发布的内容。适用于追踪突发事件或最新进展。
         """
         logger.info(f"--- TOOL: 搜索24小时内信息 (query: {query}) ---")
-        to_time = datetime.datetime.now()
-        from_time = to_time - datetime.timedelta(days=1)
-        return self._search_internal(query=query,
-                                     top_k=max_results,
-                                     FromTime=from_time.strftime("%Y-%m-%d %H:%M:%S"), 
-                                     ToTime=to_time.strftime("%Y-%m-%d %H:%M:%S"))
+        if self.use_free_search:
+            return self._free_client.search_last_24_hours(query, max_results)
+        else:
+            to_time = datetime.datetime.now()
+            from_time = to_time - datetime.timedelta(days=1)
+            return self._search_internal(query=query,
+                                         top_k=max_results,
+                                         FromTime=from_time.strftime("%Y-%m-%d %H:%M:%S"),
+                                         ToTime=to_time.strftime("%Y-%m-%d %H:%M:%S"))
 
     def search_last_week(self, query: str, max_results: int = 10) -> AnspireResponse:
         """
@@ -360,12 +380,15 @@ class AnspireAISearch:
         适用于进行周度舆情总结或回顾。
         """
         logger.info(f"--- TOOL: 搜索本周信息 (query: {query}) ---")
-        to_time = datetime.datetime.now()
-        from_time = to_time - datetime.timedelta(weeks=1)
-        return self._search_internal(query=query,
-                                     top_k=max_results,
-                                     FromTime=from_time.strftime("%Y-%m-%d %H:%M:%S"),
-                                     ToTime=to_time.strftime("%Y-%m-%d %H:%M:%S"))
+        if self.use_free_search:
+            return self._free_client.search_last_week(query, max_results)
+        else:
+            to_time = datetime.datetime.now()
+            from_time = to_time - datetime.timedelta(weeks=1)
+            return self._search_internal(query=query,
+                                         top_k=max_results,
+                                         FromTime=from_time.strftime("%Y-%m-%d %H:%M:%S"),
+                                         ToTime=to_time.strftime("%Y-%m-%d %H:%M:%S"))
 
 
 # --- 3. 测试与使用示例 ---
