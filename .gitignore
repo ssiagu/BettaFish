@@ -346,3 +346,4 @@ query_engine_streamlit_reports/
 final_reports/
 forward_prs.sh
 *back/
+MindSpider/data/
