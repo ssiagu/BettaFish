@@ -1307,11 +1307,13 @@
 
         .report-controls {
             display: flex;
-            gap: 10px;
+            align-items: center;
+            gap: 12px;
             margin-bottom: 20px;
             padding: 15px;
             border-bottom: 2px solid #000000;
             background-color: #f8f9fa;
+            flex-wrap: nowrap;
         }
 
         .report-button {
@@ -1322,6 +1324,7 @@
             font-size: 14px;
             font-weight: bold;
             transition: all 0.3s ease;
+            min-height: 44px;
         }
 
         .report-button:hover {
@@ -1340,6 +1343,43 @@
 
         .report-button.primary:hover {
             background-color: #333333;
+        }
+
+        .report-download-group {
+            display: flex;
+            gap: 8px;
+            margin-left: auto;
+            flex-wrap: nowrap;
+            align-items: center;
+        }
+
+        .report-download-group .report-button {
+            padding: 10px 14px;
+            min-width: 118px;
+        }
+
+        #downloadPdfButton,
+        #downloadMdButton {
+            padding: 10px 10px;
+            min-width: 96px;
+        }
+
+        @media (max-width: 768px) {
+            .report-controls {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .report-download-group {
+                width: 100%;
+                margin-left: 0;
+                justify-content: flex-start;
+            }
+
+            #downloadPdfButton,
+            #downloadMdButton {
+                min-width: 90px;
+            }
         }
 
         .report-status {
@@ -4707,8 +4747,11 @@ function getConsoleContainer() {
                 <!-- 控制按钮区域 -->
                 <div class="report-controls">
                     <button class="report-button primary" id="generateReportButton">生成最终报告</button>
-                    <button class="report-button" id="downloadReportButton" disabled>下载HTML</button>
-                    <button class="report-button" id="downloadPdfButton" disabled>下载PDF</button>
+                    <div class="report-download-group">
+                        <button class="report-button" id="downloadReportButton" disabled>下载HTML</button>
+                        <button class="report-button" id="downloadPdfButton" disabled>下载PDF</button>
+                        <button class="report-button" id="downloadMdButton" disabled>下载MD</button>
+                    </div>
                 </div>
                 
                 <!-- 任务进度区域 -->
@@ -4775,6 +4818,7 @@ function getConsoleContainer() {
 
             const downloadButton = document.getElementById('downloadReportButton');
             const downloadPdfButton = document.getElementById('downloadPdfButton');
+            const downloadMdButton = document.getElementById('downloadMdButton');
             if (downloadButton && !downloadButton.dataset.bound) {
                 downloadButton.dataset.bound = 'true';
                 downloadButton.addEventListener('click', () => downloadReport());
@@ -4782,6 +4826,10 @@ function getConsoleContainer() {
             if (downloadPdfButton && !downloadPdfButton.dataset.bound) {
                 downloadPdfButton.dataset.bound = 'true';
                 downloadPdfButton.addEventListener('click', () => downloadPdfFromPreview());
+            }
+            if (downloadMdButton && !downloadMdButton.dataset.bound) {
+                downloadMdButton.dataset.bound = 'true';
+                downloadMdButton.addEventListener('click', () => downloadMarkdownFromIr());
             }
 
             if (reportTaskId) {
@@ -4815,19 +4863,20 @@ function getConsoleContainer() {
         function updateDownloadButtonState(task) {
             const downloadButton = document.getElementById('downloadReportButton');
             const downloadPdfButton = document.getElementById('downloadPdfButton');
-            if (!downloadButton || !downloadPdfButton) return;
+            const downloadMdButton = document.getElementById('downloadMdButton');
+            if (!downloadButton || !downloadPdfButton || !downloadMdButton) return;
 
             const htmlReady = task && task.status === 'completed' && (
                 task.report_file_ready ||
                 task.report_file_path ||
                 task.has_result // 有内容即可允许尝试下载/预览
             );
-            const pdfReady = task && task.status === 'completed' && (
+            const irReady = task && task.status === 'completed' && (
                 task.ir_file_ready ||
-                task.ir_file_path ||
-                task.report_file_ready ||
-                task.report_file_path
+                task.ir_file_path
             );
+            const pdfReady = !!irReady;
+            const mdReady = !!irReady;
 
             if (htmlReady) {
                 downloadButton.disabled = false;
@@ -4837,6 +4886,9 @@ function getConsoleContainer() {
                 downloadButton.textContent = label;
                 downloadPdfButton.disabled = !pdfReady;
                 downloadPdfButton.dataset.taskId = task.task_id;
+                downloadMdButton.disabled = !mdReady;
+                downloadMdButton.dataset.taskId = task.task_id;
+                downloadMdButton.dataset.filename = task.markdown_file_name || '';
                 lastCompletedReportTask = task;
             } else if (!lastCompletedReportTask || (task && task.status !== 'completed')) {
                 downloadButton.disabled = true;
@@ -4845,6 +4897,9 @@ function getConsoleContainer() {
                 downloadButton.textContent = '下载HTML';
                 downloadPdfButton.disabled = true;
                 downloadPdfButton.dataset.taskId = '';
+                downloadMdButton.disabled = true;
+                downloadMdButton.dataset.taskId = '';
+                downloadMdButton.dataset.filename = '';
                 if (!reportTaskId) {
                     lastCompletedReportTask = null;
                 }
@@ -4904,9 +4959,9 @@ function getConsoleContainer() {
             });
         }
 
-        async function downloadPdfFromPreview() {
+        async function downloadPdfFromPreview(taskIdFromCaller = null) {
             const btn = document.getElementById('downloadPdfButton');
-            const taskId = btn?.dataset.taskId;
+            const taskId = taskIdFromCaller || btn?.dataset.taskId || lastCompletedReportTask?.task_id;
 
             if (!taskId) {
                 showMessage('无可用的报告任务，请先生成报告', 'error');
@@ -4957,6 +5012,51 @@ function getConsoleContainer() {
             }
         }
 
+        async function downloadMarkdownFromIr(taskIdFromCaller = null) {
+            const btn = document.getElementById('downloadMdButton');
+            const taskId = taskIdFromCaller || btn?.dataset.taskId || lastCompletedReportTask?.task_id;
+
+            if (!taskId) {
+                showMessage('无可用的报告任务，请先生成报告', 'error');
+                return;
+            }
+
+            if (btn) btn.disabled = true;
+            showMessage('正在生成Markdown，请稍候...', 'info');
+
+            try {
+                const response = await fetch(`/api/report/export/md/${taskId}`, { method: 'GET' });
+                if (!response.ok) {
+                    const error = await response.json().catch(() => ({}));
+                    throw new Error(error.error || 'Markdown导出失败');
+                }
+
+                const contentDisposition = response.headers.get('Content-Disposition') || '';
+                let filename = 'report.md';
+                const matches = /filename=\"?([^\";]+)\"?/i.exec(contentDisposition);
+                if (matches && matches[1]) {
+                    filename = matches[1];
+                }
+
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = filename;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                window.URL.revokeObjectURL(url);
+
+                showMessage('Markdown 导出完成，已开始下载', 'success');
+            } catch (err) {
+                console.error('导出Markdown失败:', err);
+                showMessage('导出Markdown失败: ' + err.message, 'error');
+            } finally {
+                if (btn) btn.disabled = false;
+            }
+        }
+
         // 渲染任务状态（使用新的进度条样式）
         function renderTaskStatus(task) {
             // 状态文本的中文映射
@@ -4974,6 +5074,9 @@ function getConsoleContainer() {
                 'error': 'task-status-error',
                 'pending': 'task-status-running'
             };
+
+            const htmlReady = task.status === 'completed' && (task.report_file_ready || task.report_file_path || task.has_result);
+            const irReady = task.status === 'completed' && (task.ir_file_ready || task.ir_file_path);
             
             // 为运行状态添加加载指示器
             const loadingIndicator = task.status !== 'completed' && task.status !== 'error' 
@@ -5035,7 +5138,6 @@ function getConsoleContainer() {
                 statusHTML += `
                     <div class="task-actions">
                         <button class="report-button primary" onclick="viewReport('${task.task_id}')">重新加载</button>
-                        ${task.report_file_ready ? `<button class="report-button" onclick="downloadReport('${task.task_id}')">下载HTML</button>` : ''}
                     </div>
                 `;
             }

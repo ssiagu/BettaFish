@@ -61,10 +61,12 @@ from .pdf_layout_optimizer import (
     ChartLayout,
     GridLayout,
 )
+from .markdown_renderer import MarkdownRenderer
 
 __all__ = [
     "HTMLRenderer",
     "PDFRenderer",
+    "MarkdownRenderer",
     "PDFLayoutOptimizer",
     "PDFLayoutConfig",
     "PageLayout",
